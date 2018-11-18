@@ -86,6 +86,7 @@ class InstallModxCommand extends BaseCommand
     protected function createMODXConfig()
     {
         $directory = GITIFY_WORKING_DIR;
+        $user = exec('whoami');
 
         // Creating config xml to install MODX with
         $this->output->writeln("Please complete following details to install MODX. Leave empty to use the [default].");
@@ -96,11 +97,11 @@ class InstallModxCommand extends BaseCommand
         $question = new Question("Database Host [{$defaultDbHost}]: ", $defaultDbHost);
         $dbHost = $helper->ask($this->input, $this->output, $question);
 
-        $defaultDbName = basename(GITIFY_WORKING_DIR);
+        $defaultDbName = $user . '_modx_' . basename(GITIFY_WORKING_DIR);
         $question = new Question("Database Name [{$defaultDbName}]: ", $defaultDbName);
         $dbName = $helper->ask($this->input, $this->output, $question);
 
-        $question = new Question('Database User [root]: ', 'root');
+        $question = new Question('Database User [' . $defaultDbName . ']: ', $defaultDbName);
         $dbUser = $helper->ask($this->input, $this->output, $question);
 
         $question = new Question('Database Password: ');
@@ -110,7 +111,8 @@ class InstallModxCommand extends BaseCommand
         $question = new Question('Database Prefix [modx_]: ', 'modx_');
         $dbPrefix = $helper->ask($this->input, $this->output, $question);
 
-        $question = new Question('Hostname [' . gethostname() . ']: ', gethostname());
+#        $question = new Question('Hostname [' . gethostname() . ']: ', gethostname());
+        $question = new Question('Hostname [localhost]: ', 'localhost');
         $host = $helper->ask($this->input, $this->output, $question);
         $host = rtrim(trim($host), '/');
 
@@ -124,6 +126,8 @@ class InstallModxCommand extends BaseCommand
         $language = $helper->ask($this->input, $this->output, $question);
 
         $defaultMgrUser = basename(GITIFY_WORKING_DIR) . '_admin';
+        $defaultMgrUser = $user;
+        
         $question = new Question('Manager User [' . $defaultMgrUser . ']: ', $defaultMgrUser);
         $managerUser = $helper->ask($this->input, $this->output, $question);
 
