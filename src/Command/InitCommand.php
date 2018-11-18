@@ -70,9 +70,9 @@ class InitCommand extends BaseCommand
         /**
          * Ask the user for the data directory to store object files in
          */
-        $question = new Question('Please enter the name of the data directory (defaults to _data/): ', '_data');
+        $question = new Question('Please enter the name of the data directory (defaults to .data/): ', '.data');
         $directory = $helper->ask($input, $output, $question);
-        if (empty($directory)) $directory = '_data/';
+        if (empty($directory)) $directory = '.data/';
         $directory = trim($directory, '/') . '/';
         $data['data_directory'] = $directory;
         if (!file_exists($directory)) {
@@ -82,9 +82,9 @@ class InitCommand extends BaseCommand
         /**
          * Ask the user for a backup directory to store database backups in
          */
-        $question = new Question('Please enter the name of the backup directory (defaults to _backup/): ', '_backup');
+        $question = new Question('Please enter the name of the backup directory (defaults to .backup/): ', '.backup');
         $directory = $helper->ask($input, $output, $question);
-        if (empty($directory)) $directory = '_backup/';
+        if (empty($directory)) $directory = '.backup/';
         $directory = trim($directory, '/') . '/';
         $data['backup_directory'] = $directory;
         if (!file_exists($directory)) {
