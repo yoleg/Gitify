@@ -126,24 +126,14 @@ class ExtractCommand extends BaseCommand
 
                 // Somewhat normalize uris into something we can use as file path that makes (human) sense
                 $uri = $resource->uri;
-                // Trim trailing slash if there is one
-                if (substr($uri, -1) == '/')
-                {
-                    $uri = rtrim($uri, '/');
-                }
-                else
-                {
-                    // Get rid of the extension by popping off the last part, and adding just the alias back.
-                    $uri = explode('/', $uri);
-                    array_pop($uri);
-
-                    // The alias might contain slashes too, so cover that
-                    $alias = explode('/', trim($resource->alias, '/'));
-                    $uri[] = end($alias);
-                    $uri = implode(DIRECTORY_SEPARATOR, $uri);
-                }
-
+                if (empty($uri)) $uri = $resource->alias;
                 if (empty($uri)) $uri = $resource->id;
+                
+                $test = preg_replace("([^\w\d\-_~,;\[\]\(\).])", '-', $uri);
+                if ($test != $uri) {
+                    $this->output->writeln('WARNING: invalid URI in resource ' . $resource->get('id') . ' : "'. $uri. '", using ID');
+                    $uri = $resource->id;
+                }
 
                 // Write the file
                 $fn = $folder . DIRECTORY_SEPARATOR . $contextKey . DIRECTORY_SEPARATOR . $uri . $extension;
@@ -207,6 +197,7 @@ class ExtractCommand extends BaseCommand
 
         // Loop over stuff to generate
         $pk = isset($options['primary']) ? $options['primary'] : '';
+        $pk = isset($options['filename']) ? $options['filename'] : $pk;
         foreach ($collection as $object) {
             /** @var \xPDOObject $object */
             $file = $this->generate($object, $options);
@@ -218,12 +209,12 @@ class ExtractCommand extends BaseCommand
             elseif (is_array($pk)) {
                 $paths = array();
                 foreach ($pk as $pkVal) {
-                    $paths[] = $object->get($pkVal);
+                    $paths[] = $this->getFilePathComponent($object, $pkVal);;
                 }
                 $path = implode('.' , $paths);
             }
             else {
-                $path = $object->get($pk);
+                $path = $this->getFilePathComponent($object, $pk);
             }
 
             $path = $this->filterPathSegment($path);
@@ -259,6 +250,32 @@ class ExtractCommand extends BaseCommand
         }
     }
 
+    public function getFilePathComponent(\xPDOObject $object, $key) {
+        if (strpos($key, '.') === false) {
+            return $object->get($key);
+        }
+        $parts = explode('.', $key);
+        $related_alias = $parts[0];
+        $related_field = $parts[1];
+        if ($related_alias == 'Principal' && $object instanceof \modAccess) {
+            $cls = $object->get('principal_class');
+            $id = $object->get('principal');
+            $related = $this->modx->getObject($cls, array('id'=> $id));
+        } else {
+            $related = $object->getOne($related_alias);
+        }
+        if (!($related instanceof \xPDOObject)) {
+            return 'null';
+        }
+        $out = $related->get($related_field);
+        if (!$out) {
+            $cls = get_class($related);
+            $this->output->writeln("WARNING: no field {$related_field} in {$cls}");
+            $out = $related->get('id');
+        }
+        return $out;
+    }
+
     /**
      * @param \xPDOObject|\modElement $object
      * @param array $options
@@ -268,6 +285,11 @@ class ExtractCommand extends BaseCommand
     {
         $fieldMeta = $object->_fieldMeta;
         $data = $this->objectToArray($object, $options);
+        foreach($data as $k => $v) {
+            if ($object->_fieldMeta[$k]['phptype'] == 'array' && !is_array($data[$k])) {
+                $data[$k] = $object->get($k);
+            }
+        }
 
         // If there's a dedicated content field, we put that below the yaml for easier managing,
         // unless the object is a modStaticResource, calling getContent on a static resource can break the
@@ -298,6 +320,18 @@ class ExtractCommand extends BaseCommand
                 unset($data[$key]);
             }
         }
+
+        // avoid quotes around values that are integers (this avoids problem with build system_settings)
+        if (isset($data['value']) && !is_null($data['value'])) {
+            $value = $data['value'];
+            if (is_numeric($value) && intval($value) == floatval($value)) {
+                $data['value'] = (int) $value;
+            }
+        }
+
+//        $debug = json_encode($data);
+//        $this->output->writeln("INFO: {$debug}");
+
 
         $out = Gitify::toYAML($data);
 
@@ -379,6 +413,27 @@ class ExtractCommand extends BaseCommand
         $data = $object->toArray('', true, true);
         switch (true) {
             // Handle TVs for resources automatically
+            case $object instanceof \modResourceGroupResource && is_array($options['primary']) && in_array('context_key', $options['primary']):
+                $resource = $object->getOne('Resource');
+                $context_key = 'null';
+                if ($resource instanceof modResource) {
+                    $context_key = $resource->get('context_key');
+                }
+                $data['context_key'] = $context_key;
+                $object->set('context_key', $context_key);
+                break;
+
+//            case $object instanceof \modTemplate:
+//                /** @var \modTemplateVar[] $tvs */
+//                $tvs = $object->getTemplateVars();
+//                $tv_names = array();
+//                foreach($tvs as $tv) {
+//                    $name = $tv->get('name');
+//                    $tv_names[] = $name;
+//                }
+//                $data['tvs'] = $tv_names;
+//                break;
+
             case $object instanceof \modResource:
                 /** @var \modResource $object */
                 $tvs = array();
@@ -397,6 +452,9 @@ class ExtractCommand extends BaseCommand
                 }
                 ksort($tvs);
                 $data['tvs'] = $tvs;
+
+                $resource_groups = $object->getResourceGroupNames();
+                $data['resource_groups'] = $resource_groups;
                 break;
 
             // Handle string-based categories automagically on elements

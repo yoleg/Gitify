@@ -106,6 +106,10 @@ class BuildCommand extends BaseCommand
 
             $type['folder'] = $folder;
 
+            if ($type['class'] == 'modResourceGroupResource' && is_array($type['primary']) && isset($type['primary']['context_key'])) {
+                unset($type['primary']['context_key']);
+            }
+
             switch (true) {
                 case (!empty($type['type']) && $type['type'] == 'content'):
                     // "content" is a shorthand for contexts + resources
@@ -316,6 +320,20 @@ class BuildCommand extends BaseCommand
             }
         }
 
+        if (isset($data['resource_groups'])) {
+            $needed = $data['resource_groups'];
+            $existing = $object->getResourceGroupNames();
+            $to_remove = array_diff($existing, $needed);
+            $still_needed = array_diff($needed, $existing);
+            foreach($still_needed as $name) {
+                $object->joinGroup($name, true);
+            }
+            foreach($to_remove as $name) {
+                $object->leaveGroup($name);
+            }
+        }
+
+
         // Save it!
         if ($object->save()) {
             if ($this->output->isVerbose()) {
@@ -459,6 +477,16 @@ class BuildCommand extends BaseCommand
             $new = true;
         }
 
+        // workaround for invalid phptype "text" (should be "string") in faqman schema
+        foreach($object->_fieldMeta as $k => $options) {
+            if ($options['phptype'] == 'text') {
+                if ($this->output->isVerbose()) {
+                    $this->output->writeln("fixing type for field {$k}");
+                }
+                $object->_fieldMeta[$k]['phptype'] = 'string';
+            }
+        }
+
         if ($object instanceof \modElement && !($object instanceof \modCategory)) {
             // Handle string-based category names automagically
             if (isset($data['category']) && !empty($data['category']) && !is_numeric($data['category'])) {
@@ -468,6 +496,7 @@ class BuildCommand extends BaseCommand
         }
 
         $object->fromArray($data, '', true, true);
+
 
         $prefix = $isConflictResolution ? '  \ ' : '- ';
         if ($object->save()) {
@@ -488,6 +517,7 @@ class BuildCommand extends BaseCommand
             $new = ($new) ? 'new' : 'updated';
             $this->output->writeln("{$prefix}<error>Could not save {$new} {$class}: {$showPrimary}</error>");
         }
+
     }
 
     /**
