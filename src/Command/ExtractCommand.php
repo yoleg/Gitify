@@ -125,18 +125,16 @@ class ExtractCommand extends BaseCommand
                 $file = $this->generate($resource, $options);
 
                 // Somewhat normalize uris into something we can use as file path that makes (human) sense
-                $uri = $resource->uri;
-                if (empty($uri)) $uri = $resource->alias;
-                if (empty($uri)) $uri = $resource->id;
-                
-                $test = preg_replace("([^\w\d\-_~,;\[\]\(\).])", '-', $uri);
-                if ($test != $uri) {
-                    $this->output->writeln('WARNING: invalid URI in resource ' . $resource->get('id') . ' : "'. $uri. '", using ID');
-                    $uri = $resource->id;
-                }
+                $basename = $resource->uri;
+                if (empty($basename)) $basename = $resource->alias;
+                if (empty($basename)) $basename = $resource->id;
+
+                $basename = trim($basename);
+                $basename = trim($basename, DIRECTORY_SEPARATOR);
+                $basename = str_replace(DIRECTORY_SEPARATOR, '-', $basename);
 
                 // Write the file
-                $fn = $folder . DIRECTORY_SEPARATOR . $contextKey . DIRECTORY_SEPARATOR . $uri . $extension;
+                $fn = $folder . DIRECTORY_SEPARATOR . $contextKey . DIRECTORY_SEPARATOR . $basename . $extension;
 
                 $fn = $this->normalizePath($fn);
 
@@ -151,7 +149,7 @@ class ExtractCommand extends BaseCommand
 
                 // If we're in verbose mode (-v/--verbose), output a message with what we did
                 if ($this->output->isVerbose()) {
-                    $this->output->writeln('  \ ' . ($written ? "Generated {$uri}{$extension}" : "Skipped {$uri}{$extension}, no change"));
+                    $this->output->writeln('  \ ' . ($written ? "Generated {$basename}{$extension}" : "Skipped {$basename}{$extension}, no change"));
                 }
             }
         }
